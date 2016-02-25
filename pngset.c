@@ -1,8 +1,8 @@
 
 /* pngset.c - storage of image information into info struct
  *
- * Last changed in libpng 1.6.17 [March 26, 2015]
- * Copyright (c) 1998-2015 Glenn Randers-Pehrson
+ * Last changed in libpng 1.7.0 [(PENDING RELEASE)]
+ * Copyright (c) 1998-2002,2004,2006-2016 Glenn Randers-Pehrson
  * (Version 0.96 Copyright (c) 1996, 1997 Andreas Dilger)
  * (Version 0.88 Copyright (c) 1995, 1996 Guy Eric Schalnat, Group 42, Inc.)
  *
@@ -17,6 +17,7 @@
  */
 
 #include "pngpriv.h"
+#define PNG_SRC_FILE PNG_SRC_FILE_pngset
 
 #if defined(PNG_READ_SUPPORTED) || defined(PNG_WRITE_SUPPORTED)
 
@@ -123,12 +124,12 @@ png_set_cHRM_XYZ(png_const_structrp png_ptr, png_inforp info_ptr, double red_X,
       png_fixed(png_ptr, red_X, "cHRM Red X"),
       png_fixed(png_ptr, red_Y, "cHRM Red Y"),
       png_fixed(png_ptr, red_Z, "cHRM Red Z"),
-      png_fixed(png_ptr, green_X, "cHRM Red X"),
-      png_fixed(png_ptr, green_Y, "cHRM Red Y"),
-      png_fixed(png_ptr, green_Z, "cHRM Red Z"),
-      png_fixed(png_ptr, blue_X, "cHRM Red X"),
-      png_fixed(png_ptr, blue_Y, "cHRM Red Y"),
-      png_fixed(png_ptr, blue_Z, "cHRM Red Z"));
+      png_fixed(png_ptr, green_X, "cHRM Green X"),
+      png_fixed(png_ptr, green_Y, "cHRM Green Y"),
+      png_fixed(png_ptr, green_Z, "cHRM Green Z"),
+      png_fixed(png_ptr, blue_X, "cHRM Blue X"),
+      png_fixed(png_ptr, blue_Y, "cHRM Blue Y"),
+      png_fixed(png_ptr, blue_Z, "cHRM Blue Z"));
 }
 #  endif /* FLOATING_POINT */
 
@@ -163,8 +164,6 @@ void PNGAPI
 png_set_hIST(png_const_structrp png_ptr, png_inforp info_ptr,
     png_const_uint_16p hist)
 {
-   int i;
-
    png_debug1(1, "in %s storage function", "hIST");
 
    if (png_ptr == NULL || info_ptr == NULL)
@@ -196,8 +195,12 @@ png_set_hIST(png_const_structrp png_ptr, png_inforp info_ptr,
 
    info_ptr->free_me |= PNG_FREE_HIST;
 
-   for (i = 0; i < info_ptr->num_palette; i++)
-      info_ptr->hist[i] = hist[i];
+   {
+      unsigned int i;
+
+      for (i = 0; i < info_ptr->num_palette; i++)
+         info_ptr->hist[i] = hist[i];
+   }
 
    info_ptr->valid |= PNG_INFO_hIST;
 }
@@ -216,31 +219,16 @@ png_set_IHDR(png_const_structrp png_ptr, png_inforp info_ptr,
 
    info_ptr->width = width;
    info_ptr->height = height;
-   info_ptr->bit_depth = (png_byte)bit_depth;
-   info_ptr->color_type = (png_byte)color_type;
-   info_ptr->compression_type = (png_byte)compression_type;
-   info_ptr->filter_type = (png_byte)filter_type;
-   info_ptr->interlace_type = (png_byte)interlace_type;
+   info_ptr->bit_depth = png_check_bits(png_ptr, bit_depth, 6);
+   info_ptr->format = png_check_bits(png_ptr,
+      PNG_FORMAT_FROM_COLOR_TYPE(color_type), PNG_RF_BITS);
+   info_ptr->compression_type = png_check_byte(png_ptr, compression_type);
+   info_ptr->filter_type = png_check_byte(png_ptr, filter_type);
+   info_ptr->interlace_type = png_check_byte(png_ptr, interlace_type);
 
    png_check_IHDR (png_ptr, info_ptr->width, info_ptr->height,
-       info_ptr->bit_depth, info_ptr->color_type, info_ptr->interlace_type,
+       info_ptr->bit_depth, color_type, info_ptr->interlace_type,
        info_ptr->compression_type, info_ptr->filter_type);
-
-   if (info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
-      info_ptr->channels = 1;
-
-   else if ((info_ptr->color_type & PNG_COLOR_MASK_COLOR) != 0)
-      info_ptr->channels = 3;
-
-   else
-      info_ptr->channels = 1;
-
-   if ((info_ptr->color_type & PNG_COLOR_MASK_ALPHA) != 0)
-      info_ptr->channels++;
-
-   info_ptr->pixel_depth = (png_byte)(info_ptr->channels * info_ptr->bit_depth);
-
-   info_ptr->rowbytes = PNG_ROWBYTES(info_ptr->pixel_depth, width);
 }
 
 #ifdef PNG_oFFs_SUPPORTED
@@ -255,7 +243,7 @@ png_set_oFFs(png_const_structrp png_ptr, png_inforp info_ptr,
 
    info_ptr->x_offset = offset_x;
    info_ptr->y_offset = offset_y;
-   info_ptr->offset_unit_type = (png_byte)unit_type;
+   info_ptr->offset_unit_type = png_check_byte(png_ptr, unit_type);
    info_ptr->valid |= PNG_INFO_oFFs;
 }
 #endif
@@ -311,8 +299,8 @@ png_set_pCAL(png_const_structrp png_ptr, png_inforp info_ptr,
    png_debug(3, "storing X0, X1, type, and nparams in info");
    info_ptr->pcal_X0 = X0;
    info_ptr->pcal_X1 = X1;
-   info_ptr->pcal_type = (png_byte)type;
-   info_ptr->pcal_nparams = (png_byte)nparams;
+   info_ptr->pcal_type = png_check_byte(png_ptr, type);
+   info_ptr->pcal_nparams = png_check_byte(png_ptr, nparams);
 
    length = strlen(units) + 1;
    png_debug1(3, "allocating units for info (%lu bytes)",
@@ -391,7 +379,7 @@ png_set_sCAL_s(png_const_structrp png_ptr, png_inforp info_ptr,
        sheight[0] == 45 /* '-' */ || !png_check_fp_string(sheight, lengthh))
       png_error(png_ptr, "Invalid sCAL height");
 
-   info_ptr->scal_unit = (png_byte)unit;
+   info_ptr->scal_unit = png_check_byte(png_ptr, unit);
 
    ++lengthw;
 
@@ -432,7 +420,8 @@ png_set_sCAL_s(png_const_structrp png_ptr, png_inforp info_ptr,
    info_ptr->free_me |= PNG_FREE_SCAL;
 }
 
-#  ifdef PNG_FLOATING_POINT_SUPPORTED
+#  if defined(PNG_FLOATING_POINT_SUPPORTED) &&\
+      defined(PNG_FLOATING_ARITHMETIC_SUPPORTED)
 void PNGAPI
 png_set_sCAL(png_const_structrp png_ptr, png_inforp info_ptr, int unit,
     double width, double height)
@@ -503,7 +492,7 @@ png_set_pHYs(png_const_structrp png_ptr, png_inforp info_ptr,
 
    info_ptr->x_pixels_per_unit = res_x;
    info_ptr->y_pixels_per_unit = res_y;
-   info_ptr->phys_unit_type = (png_byte)unit_type;
+   info_ptr->phys_unit_type = png_check_byte(png_ptr, unit_type);
    info_ptr->valid |= PNG_INFO_pHYs;
 }
 #endif
@@ -513,57 +502,51 @@ png_set_PLTE(png_structrp png_ptr, png_inforp info_ptr,
     png_const_colorp palette, int num_palette)
 {
 
+   png_uint_32 max_palette_length;
+
    png_debug1(1, "in %s storage function", "PLTE");
 
    if (png_ptr == NULL || info_ptr == NULL)
       return;
 
-   if (num_palette < 0 || num_palette > PNG_MAX_PALETTE_LENGTH)
+   max_palette_length = (info_ptr->format & PNG_FORMAT_FLAG_COLORMAP) == 0 ?
+      (1 << info_ptr->bit_depth) : PNG_MAX_PALETTE_LENGTH;
+
+   if (num_palette < 0 || num_palette > (int) max_palette_length)
    {
-      if (info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
-         png_error(png_ptr, "Invalid palette length");
+      if ((info_ptr->format & PNG_FORMAT_FLAG_COLORMAP) != 0)
+         png_chunk_error(png_ptr, "Invalid palette length");
 
       else
       {
-         png_warning(png_ptr, "Invalid palette length");
-
+         png_chunk_report(png_ptr, "Invalid palette length", PNG_CHUNK_ERROR);
          return;
       }
    }
 
-   if ((num_palette > 0 && palette == NULL) ||
-      (num_palette == 0
-#        ifdef PNG_MNG_FEATURES_SUPPORTED
-            && (png_ptr->mng_features_permitted & PNG_FLAG_MNG_EMPTY_PLTE) == 0
-#        endif
-      ))
-   {
+#ifdef PNG_MNG_FEATURES_SUPPORTED
+   if ((num_palette > 0 && palette == NULL) || (num_palette == 0 &&
+       (png_ptr->mng_features_permitted & PNG_FLAG_MNG_EMPTY_PLTE) == 0))
       png_error(png_ptr, "Invalid palette");
-   }
+#else
+   if ((num_palette > 0 && palette == NULL) || num_palette == 0)
+      png_error(png_ptr, "Invalid palette");
+#endif /* MNG_FEATURES */
 
-   /* It may not actually be necessary to set png_ptr->palette here;
-    * we do it for backward compatibility with the way the png_handle_tRNS
-    * function used to do the allocation.
-    *
-    * 1.6.0: the above statement appears to be incorrect; something has to set
-    * the palette inside png_struct on read.
-    */
    png_free_data(png_ptr, info_ptr, PNG_FREE_PLTE, 0);
 
    /* Changed in libpng-1.2.1 to allocate PNG_MAX_PALETTE_LENGTH instead
-    * of num_palette entries, in case of an invalid PNG file that has
-    * too-large sample values.
+    * of num_palette entries, in case of an invalid PNG file or incorrect
+    * call to png_set_PLTE() with too-large sample values.
     */
-   png_ptr->palette = png_voidcast(png_colorp, png_calloc(png_ptr,
+   info_ptr->palette = png_voidcast(png_colorp, png_calloc(png_ptr,
        PNG_MAX_PALETTE_LENGTH * (sizeof (png_color))));
 
    if (num_palette > 0)
-      memcpy(png_ptr->palette, palette, num_palette * (sizeof (png_color)));
-   info_ptr->palette = png_ptr->palette;
-   info_ptr->num_palette = png_ptr->num_palette = (png_uint_16)num_palette;
+      memcpy(info_ptr->palette, palette, num_palette * (sizeof (png_color)));
 
+   info_ptr->num_palette = png_check_bits(png_ptr, num_palette, 9);
    info_ptr->free_me |= PNG_FREE_PLTE;
-
    info_ptr->valid |= PNG_INFO_PLTE;
 }
 
@@ -643,7 +626,7 @@ png_set_iCCP(png_const_structrp png_ptr, png_inforp info_ptr,
     */
    {
       int result = png_colorspace_set_ICC(png_ptr, &info_ptr->colorspace, name,
-         proflen, profile, info_ptr->color_type);
+         proflen, profile, (info_ptr->format & PNG_FORMAT_FLAG_COLOR) != 0);
 
       png_colorspace_sync_info(png_ptr, info_ptr);
 
@@ -673,7 +656,6 @@ png_set_iCCP(png_const_structrp png_ptr, png_inforp info_ptr,
    if (new_iccp_profile == NULL)
    {
       png_free(png_ptr, new_iccp_name);
-      new_iccp_name = NULL;
       png_benign_error(png_ptr,
           "Insufficient memory to process iCCP profile");
 
@@ -684,7 +666,6 @@ png_set_iCCP(png_const_structrp png_ptr, png_inforp info_ptr,
 
    png_free_data(png_ptr, info_ptr, PNG_FREE_ICCP, 0);
 
-   info_ptr->iccp_proflen = proflen;
    info_ptr->iccp_name = new_iccp_name;
    info_ptr->iccp_profile = new_iccp_profile;
    info_ptr->free_me |= PNG_FREE_ICCP;
@@ -692,9 +673,80 @@ png_set_iCCP(png_const_structrp png_ptr, png_inforp info_ptr,
 }
 #endif
 
+#if defined(PNG_TEXT_SUPPORTED) || defined(PNG_tIME_SUPPORTED)
+static png_byte
+get_location(png_const_structrp png_ptr)
+   /* Return the correct location flag for a chunk.  For a png_set_<chunk>
+    * called during read this is the current read location, for a
+    * png_set_<chunk> called during write it is the following write location
+    * (because the chunks at the current location have already been written.)
+    * For a png_set_<chunk> called before read starts (none of the 'position'
+    * mode bits are set) the position is set to the start (PNG_HAVE_IHDR).  For
+    * a png_set_chunk> called before write starts PNG_HAVE_PLTE|PNG_AFTER_IDAT
+    * are set because we don't know whether this is the main png_info or the one
+    * for use after the IDAT from png_write_end.
+    *
+    * The latter behavior gives compatibility with the old behavior of
+    * png_set_text; it only wrote text chunks after the PLTE or IDAT and it just
+    * wrote them once.
+    */
+{
+   if ((png_ptr->mode & PNG_AFTER_IDAT) != 0U)
+      return PNG_AFTER_IDAT;
+
+   else if ((png_ptr->mode & PNG_HAVE_PLTE) != 0U)
+   {
+      /* In a write operation PNG_HAVE_PLTE is set when the chunks before the
+       * IDAT are written (in png_write_info), so the location needs to be after
+       * IDAT.  In a read the chunk was read after the PLTE but before the IDAT.
+       */
+      if (png_ptr->read_struct)
+         return PNG_HAVE_PLTE;
+
+      else /* write struct */
+         return PNG_AFTER_IDAT;
+   }
+
+   else if ((png_ptr->mode & PNG_HAVE_IHDR) != 0U)
+   {
+      /* For read this means the chunk is between the IHDR and any PLTE; there
+       * may be none but then there is no order to preserve.
+       *
+       * For write png_write_IHDR has been called and that means that the info
+       * before PLTE has been written, so the chunk goes after.
+       */
+      if (png_ptr->read_struct)
+         return PNG_HAVE_IHDR;
+
+      else /* write struct */
+         return PNG_HAVE_PLTE;
+   }
+
+   else if ((png_ptr->mode & PNG_HAVE_PNG_SIGNATURE) != 0U)
+   {
+      /* This should not happen on read, on write it means that the app has
+       * started writing so assume the text is meant to go before PLTE.
+       */
+      return PNG_HAVE_IHDR;
+   }
+
+   /* Either a png_set_<chunk> from the application during read before reading
+    * starts (so mode is 0) or the same for write.
+    */
+   else
+   {
+      if (png_ptr->read_struct)
+         return PNG_HAVE_IHDR;
+
+      else
+         return PNG_HAVE_PLTE|PNG_AFTER_IDAT;
+   }
+}
+#endif /* TEXT || tIME */
+
 #ifdef PNG_TEXT_SUPPORTED
 void PNGAPI
-png_set_text(png_const_structrp png_ptr, png_inforp info_ptr,
+png_set_text(png_structrp png_ptr, png_inforp info_ptr,
     png_const_textp text_ptr, int num_text)
 {
    int ret;
@@ -705,12 +757,12 @@ png_set_text(png_const_structrp png_ptr, png_inforp info_ptr,
 }
 
 int /* PRIVATE */
-png_set_text_2(png_const_structrp png_ptr, png_inforp info_ptr,
+png_set_text_2(png_structrp png_ptr, png_inforp info_ptr,
     png_const_textp text_ptr, int num_text)
 {
    int i;
 
-   png_debug1(1, "in %lx storage function", png_ptr == NULL ? "unexpected" :
+   png_debug1(1, "in %lx storage function", png_ptr == NULL ? 0xabadca11 :
       (unsigned long)png_ptr->chunk_name);
 
    if (png_ptr == NULL || info_ptr == NULL || num_text <= 0 || text_ptr == NULL)
@@ -726,6 +778,11 @@ png_set_text_2(png_const_structrp png_ptr, png_inforp info_ptr,
       int old_num_text = info_ptr->num_text;
       int max_text;
       png_textp new_text = NULL;
+
+      /* The code below goes horribly wrong if old_num_text ever ends up
+       * negative, so:
+       */
+      affirm(old_num_text >= 0);
 
       /* Calculate an appropriate max_text, checking for overflow. */
       max_text = old_num_text;
@@ -816,6 +873,12 @@ png_set_text_2(png_const_structrp png_ptr, png_inforp info_ptr,
       }
 #  endif
 
+      /* Record the location for posterity.  On the read side this just says
+       * where the chunk was (approximately).  On the write side it says how far
+       * through the write process libpng was before this API was called.
+       */
+      textp->location = get_location(png_ptr);
+
       if (text_ptr[i].text == NULL || text_ptr[i].text[0] == '\0')
       {
          text_length = 0;
@@ -905,24 +968,38 @@ png_set_tIME(png_const_structrp png_ptr, png_inforp info_ptr,
 {
    png_debug1(1, "in %s storage function", "tIME");
 
-   if (png_ptr == NULL || info_ptr == NULL || mod_time == NULL ||
-       (png_ptr->mode & PNG_WROTE_tIME) != 0)
+   if (png_ptr == NULL || info_ptr == NULL || mod_time == NULL)
       return;
+
+   /* It is valid to do set the tIME chunk after the IDAT has been written, but
+    * not if one has already been written.  This was ignored before - the
+    * previous time was used - this is a bad thing.
+    */
+   if ((info_ptr->valid & PNG_INFO_tIME) != 0 /* Changing a time chunk */ &&
+       (png_ptr->mode & PNG_HAVE_IHDR) != 0 /* after writing started */)
+   {
+      /* So it can be *set* but it can't be *changed* after the info before PLTE
+       * has been written.  (Note that putting tIME into an unknown chunk
+       * currently gets round this; to be fixed.)
+       */
+      png_app_error(png_ptr, "cannot change tIME after writing starts");
+      return;
+   }
 
    if (mod_time->month == 0   || mod_time->month > 12  ||
        mod_time->day   == 0   || mod_time->day   > 31  ||
        mod_time->hour  > 23   || mod_time->minute > 59 ||
        mod_time->second > 60)
    {
-      png_warning(png_ptr, "Ignoring invalid time value");
-
+      png_app_error(png_ptr, "Ignoring invalid time value");
       return;
    }
 
    info_ptr->mod_time = *mod_time;
+   info_ptr->time_location = get_location(png_ptr);
    info_ptr->valid |= PNG_INFO_tIME;
 }
-#endif
+#endif /* tIME */
 
 #ifdef PNG_tRNS_SUPPORTED
 void PNGAPI
@@ -932,67 +1009,98 @@ png_set_tRNS(png_structrp png_ptr, png_inforp info_ptr,
    png_debug1(1, "in %s storage function", "tRNS");
 
    if (png_ptr == NULL || info_ptr == NULL)
-
       return;
 
-   if (trans_alpha != NULL)
+   if ((info_ptr->format & PNG_FORMAT_FLAG_ALPHA) != 0)
+      png_chunk_report(png_ptr,
+         "png_set_tRNS: invalid on PNG with alpha channel", PNG_CHUNK_ERROR);
+
+   else if ((info_ptr->format & PNG_FORMAT_FLAG_COLORMAP) != 0)
    {
-       /* It may not actually be necessary to set png_ptr->trans_alpha here;
-        * we do it for backward compatibility with the way the png_handle_tRNS
-        * function used to do the allocation.
-        *
-        * 1.6.0: The above statement is incorrect; png_handle_tRNS effectively
-        * relies on png_set_tRNS storing the information in png_struct
-        * (otherwise it won't be there for the code in pngrtran.c).
-        */
+      int max_num;
 
-       png_free_data(png_ptr, info_ptr, PNG_FREE_TRNS, 0);
+      /* Free the old data; num_trans 0 can be used to kill the tRNS */
+      png_free_data(png_ptr, info_ptr, PNG_FREE_TRNS, 0);
 
-       /* Changed from num_trans to PNG_MAX_PALETTE_LENGTH in version 1.2.1 */
-       png_ptr->trans_alpha = info_ptr->trans_alpha = png_voidcast(png_bytep,
-         png_malloc(png_ptr, PNG_MAX_PALETTE_LENGTH));
+      /* Do this just in case the old data was not owned by libpng: */
+      info_ptr->valid &= PNG_BIC_MASK(PNG_INFO_tRNS);
+      info_ptr->trans_alpha = NULL;
+      info_ptr->num_trans = 0;
 
-       if (num_trans > 0 && num_trans <= PNG_MAX_PALETTE_LENGTH)
-          memcpy(info_ptr->trans_alpha, trans_alpha, (png_size_t)num_trans);
-   }
+      /* Expect png_set_PLTE to happen before png_set_tRNS, so num_palette will
+       * be set, but this is not a requirement of the API.
+       */
+      if (info_ptr->num_palette)
+         max_num = info_ptr->num_palette;
 
-   if (trans_color != NULL)
-   {
-#ifdef PNG_WARNINGS_SUPPORTED
-      if (info_ptr->bit_depth < 16)
+      else
+         max_num = 1 << info_ptr->bit_depth;
+
+      if (num_trans > max_num)
       {
-         int sample_max = (1 << info_ptr->bit_depth) - 1;
-
-         if ((info_ptr->color_type == PNG_COLOR_TYPE_GRAY &&
-             trans_color->gray > sample_max) ||
-             (info_ptr->color_type == PNG_COLOR_TYPE_RGB &&
-             (trans_color->red > sample_max ||
-             trans_color->green > sample_max ||
-             trans_color->blue > sample_max)))
-            png_warning(png_ptr,
-               "tRNS chunk has out-of-range samples for bit_depth");
+         png_chunk_report(png_ptr, "png_set_tRNS: num_trans too large",
+            PNG_CHUNK_ERROR);
+         /* If control returns simply limit it; the behavior prior to 1.7 was to
+          * issue a warning and skip the palette in png_write_tRNS.
+          */
+         num_trans = max_num;
       }
-#endif
 
-      info_ptr->trans_color = *trans_color;
+      /* But only attempt a malloc if there is something to do; so the app can
+       * set a tRNS array then later delete it.
+       */
+      if (num_trans > 0 && trans_alpha != NULL)
+      {
+         /* Changed from num_trans to PNG_MAX_PALETTE_LENGTH in version 1.2.1,
+          * this avoids issues where a palette image contains out of range
+          * indices.
+          */
+         info_ptr->trans_alpha = png_voidcast(png_bytep, png_malloc(png_ptr,
+            PNG_MAX_PALETTE_LENGTH));
+         info_ptr->free_me |= PNG_FREE_TRNS;
 
-      if (num_trans == 0)
-         num_trans = 1;
+         memcpy(info_ptr->trans_alpha, trans_alpha,
+            (unsigned)/*SAFE*/num_trans);
+         info_ptr->valid |= PNG_INFO_tRNS;
+         info_ptr->num_trans = png_check_bits(png_ptr, num_trans, 9);
+      }
    }
 
-   info_ptr->num_trans = (png_uint_16)num_trans;
-
-   if (num_trans != 0)
+   else /* not a PALETTE image */
    {
-      info_ptr->valid |= PNG_INFO_tRNS;
-      info_ptr->free_me |= PNG_FREE_TRNS;
+      /* Invalidate any prior transparent color and set num_trans. It is not
+       * used internally in this case but png_get_tRNS still returns it.
+       */
+      info_ptr->valid &= PNG_BIC_MASK(PNG_INFO_tRNS);
+      info_ptr->num_trans = 0; /* for png_get_tRNS */
+
+      if (trans_color != NULL && info_ptr->bit_depth < 16)
+      {
+         unsigned int sample_max = (1U << info_ptr->bit_depth) - 1U;
+
+         if (!(info_ptr->format & PNG_FORMAT_FLAG_COLOR) ?
+             trans_color->gray <= sample_max :
+             trans_color->red <= sample_max &&
+             trans_color->green <= sample_max &&
+             trans_color->blue <= sample_max)
+         {
+            info_ptr->trans_color = *trans_color;
+            info_ptr->valid |= PNG_INFO_tRNS;
+            info_ptr->num_trans = 1; /* for png_get_tRNS */
+         }
+
+         else
+            png_chunk_report(png_ptr,
+               "tRNS chunk has out-of-range samples for bit_depth",
+               PNG_CHUNK_ERROR);
+      }
    }
 }
 #endif
 
 #ifdef PNG_sPLT_SUPPORTED
 void PNGAPI
-png_set_sPLT(png_const_structrp png_ptr,
+png_set_sPLT(png_structrp png_ptr,
     png_inforp info_ptr, png_const_sPLT_tp entries, int nentries)
 /*
  *  entries        - array of png_sPLT_t structures
@@ -1100,13 +1208,13 @@ check_location(png_const_structrp png_ptr, int location)
     * change; previously the app had to use the
     * png_set_unknown_chunk_location API below for each chunk.
     */
-   if (location == 0 && (png_ptr->mode & PNG_IS_READ_STRUCT) == 0)
+   if (location == 0 && !png_ptr->read_struct)
    {
       /* Write struct, so unknown chunks come from the app */
       png_app_warning(png_ptr,
          "png_set_unknown_chunks now expects a valid location");
       /* Use the old behavior */
-      location = (png_byte)(png_ptr->mode &
+      location = png_check_byte(png_ptr, png_ptr->mode &
          (PNG_HAVE_IHDR|PNG_HAVE_PLTE|PNG_AFTER_IDAT));
    }
 
@@ -1125,11 +1233,11 @@ check_location(png_const_structrp png_ptr, int location)
    /* The cast is safe because 'location' is a bit mask and only the low four
     * bits are significant.
     */
-   return (png_byte)location;
+   return png_check_byte(png_ptr, location);
 }
 
 void PNGAPI
-png_set_unknown_chunks(png_const_structrp png_ptr,
+png_set_unknown_chunks(png_structrp png_ptr,
    png_inforp info_ptr, png_const_unknown_chunkp unknowns, int num_unknowns)
 {
    png_unknown_chunkp np;
@@ -1144,18 +1252,16 @@ png_set_unknown_chunks(png_const_structrp png_ptr,
     * code) but may be meaningless if the read or write handling of unknown
     * chunks is not compiled in.
     */
-#  if !defined(PNG_READ_UNKNOWN_CHUNKS_SUPPORTED) && \
-      defined(PNG_READ_SUPPORTED)
-      if ((png_ptr->mode & PNG_IS_READ_STRUCT) != 0)
+#  ifndef PNG_READ_UNKNOWN_CHUNKS_SUPPORTED
+      if (png_ptr->read_struct)
       {
          png_app_error(png_ptr, "no unknown chunk support on read");
 
          return;
       }
 #  endif
-#  if !defined(PNG_WRITE_UNKNOWN_CHUNKS_SUPPORTED) && \
-      defined(PNG_WRITE_SUPPORTED)
-      if ((png_ptr->mode & PNG_IS_READ_STRUCT) == 0)
+#  ifndef PNG_WRITE_UNKNOWN_CHUNKS_SUPPORTED
+      if (!png_ptr->read_struct)
       {
          png_app_error(png_ptr, "no unknown chunk support on write");
 
@@ -1174,9 +1280,7 @@ png_set_unknown_chunks(png_const_structrp png_ptr,
 
    if (np == NULL)
    {
-      png_chunk_report(png_ptr, "too many unknown chunks",
-         PNG_CHUNK_WRITE_ERROR);
-
+      png_chunk_report(png_ptr, "too many unknown chunks", PNG_CHUNK_ERROR);
       return;
    }
 
@@ -1209,7 +1313,7 @@ png_set_unknown_chunks(png_const_structrp png_ptr,
          if (np->data == NULL)
          {
             png_chunk_report(png_ptr, "unknown chunk: out of memory",
-               PNG_CHUNK_WRITE_ERROR);
+               PNG_CHUNK_ERROR);
             /* But just skip storing the unknown chunk */
             continue;
          }
@@ -1233,8 +1337,6 @@ png_set_unknown_chunk_location(png_const_structrp png_ptr, png_inforp info_ptr,
 {
    /* This API is pretty pointless in 1.6.0 because the location can be set
     * before the call to png_set_unknown_chunks.
-    *
-    * TODO: add a png_app_warning in 1.7
     */
    if (png_ptr != NULL && info_ptr != NULL && chunk >= 0 &&
       chunk < info_ptr->unknown_chunks_num)
@@ -1253,27 +1355,17 @@ png_set_unknown_chunk_location(png_const_structrp png_ptr, png_inforp info_ptr,
       info_ptr->unknown_chunks[chunk].location =
          check_location(png_ptr, location);
    }
+
+   /* TODO: make this an error in 1.8 (or maybe it will become one in 1.7!) */
+   else if (png_ptr != NULL)
+      png_app_warning(png_ptr, "unknown chunk index out of range");
 }
 #endif /* STORE_UNKNOWN_CHUNKS */
 
-#ifdef PNG_MNG_FEATURES_SUPPORTED
-png_uint_32 PNGAPI
-png_permit_mng_features (png_structrp png_ptr, png_uint_32 mng_features)
-{
-   png_debug(1, "in png_permit_mng_features");
-
-   if (png_ptr == NULL)
-      return 0;
-
-   png_ptr->mng_features_permitted = mng_features & PNG_ALL_MNG_FEATURES;
-
-   return png_ptr->mng_features_permitted;
-}
-#endif
-
 #ifdef PNG_HANDLE_AS_UNKNOWN_SUPPORTED
 static unsigned int
-add_one_chunk(png_bytep list, unsigned int count, png_const_bytep add, int keep)
+add_one_chunk(png_structrp png_ptr, png_bytep list, unsigned int count,
+   png_const_bytep add, int keep)
 {
    unsigned int i;
 
@@ -1284,8 +1376,8 @@ add_one_chunk(png_bytep list, unsigned int count, png_const_bytep add, int keep)
    {
       if (memcmp(list, add, 4) == 0)
       {
-         list[4] = (png_byte)keep;
-
+         list[4] = keep & 0x3;
+         png_cache_known_unknown(png_ptr, add, keep);
          return count;
       }
    }
@@ -1294,7 +1386,8 @@ add_one_chunk(png_bytep list, unsigned int count, png_const_bytep add, int keep)
    {
       ++count;
       memcpy(list, add, 4);
-      list[4] = (png_byte)keep;
+      list[4] = png_check_byte(png_ptr, keep);
+      png_cache_known_unknown(png_ptr, add, keep);
    }
 
    return count;
@@ -1310,16 +1403,27 @@ png_set_keep_unknown_chunks(png_structrp png_ptr, int keep,
    if (png_ptr == NULL)
       return;
 
+   /* To actually use IF_SAFE or ALWAYS on read it is necessary to have the
+    * read SAVE code enabled.
+    */
    if (keep < 0 || keep >= PNG_HANDLE_CHUNK_LAST)
    {
       png_app_error(png_ptr, "png_set_keep_unknown_chunks: invalid keep");
-
       return;
    }
 
+#  ifndef PNG_SAVE_UNKNOWN_CHUNKS_SUPPORTED
+      /* This is only a warning; if the application handles the chunk with a
+       * read callback it may work fine.
+       */
+      if (png_ptr->read_struct && keep >= PNG_HANDLE_CHUNK_IF_SAFE)
+         png_app_warning(png_ptr,
+            "png_set_keep_unknown_chunks: unsupported keep");
+#  endif
+
    if (num_chunks_in <= 0)
    {
-      png_ptr->unknown_default = keep;
+      png_ptr->unknown_default = (unsigned)keep & 0x3;
 
       /* '0' means just set the flags, so stop here */
       if (num_chunks_in == 0)
@@ -1363,7 +1467,6 @@ png_set_keep_unknown_chunks(png_structrp png_ptr, int keep,
           * which can be switched off.
           */
          png_app_error(png_ptr, "png_set_keep_unknown_chunks: no chunk list");
-
          return;
       }
 
@@ -1379,7 +1482,6 @@ png_set_keep_unknown_chunks(png_structrp png_ptr, int keep,
    if (num_chunks + old_num_chunks > UINT_MAX/5)
    {
       png_app_error(png_ptr, "png_set_keep_unknown_chunks: too many chunks");
-
       return;
    }
 
@@ -1415,7 +1517,7 @@ png_set_keep_unknown_chunks(png_structrp png_ptr, int keep,
 
       for (i=0; i<num_chunks; ++i)
       {
-         old_num_chunks = add_one_chunk(new_list, old_num_chunks,
+         old_num_chunks = add_one_chunk(png_ptr, new_list, old_num_chunks,
             chunk_list+5*i, keep);
       }
 
@@ -1472,7 +1574,7 @@ png_set_read_user_chunk_fn(png_structrp png_ptr, png_voidp user_chunk_ptr,
 }
 #endif
 
-#ifdef PNG_INFO_IMAGE_SUPPORTED
+#ifdef PNG_WRITE_PNG_SUPPORTED
 void PNGAPI
 png_set_rows(png_const_structrp png_ptr, png_inforp info_ptr,
     png_bytepp row_pointers)
@@ -1494,67 +1596,25 @@ png_set_rows(png_const_structrp png_ptr, png_inforp info_ptr,
 #endif
 
 void PNGAPI
-png_set_compression_buffer_size(png_structrp png_ptr, png_size_t size)
+png_set_compression_buffer_size(png_structrp png_ptr, png_alloc_size_t size)
 {
-    if (png_ptr == NULL)
-       return;
+   if (png_ptr == NULL)
+      return;
 
-    if (size == 0 || size > PNG_UINT_31_MAX)
-       png_error(png_ptr, "invalid compression buffer size");
+   if (size == 0 ||
+       size > (png_ptr->read_struct ? ZLIB_IO_MAX : PNG_UINT_31_MAX))
+      png_error(png_ptr, "invalid compression buffer size");
 
-#  ifdef PNG_SEQUENTIAL_READ_SUPPORTED
-      if ((png_ptr->mode & PNG_IS_READ_STRUCT) != 0)
-      {
-         png_ptr->IDAT_read_size = (png_uint_32)size; /* checked above */
-         return;
-      }
-#  endif
-
-#  ifdef PNG_WRITE_SUPPORTED
-      if ((png_ptr->mode & PNG_IS_READ_STRUCT) == 0)
-      {
-         if (png_ptr->zowner != 0)
-         {
-            png_warning(png_ptr,
-              "Compression buffer size cannot be changed because it is in use");
-
-            return;
-         }
-
-#ifndef __COVERITY__
-         if (size > ZLIB_IO_MAX)
-         {
-            png_warning(png_ptr,
-               "Compression buffer size limited to system maximum");
-            size = ZLIB_IO_MAX; /* must fit */
-         }
-#endif
-
-         if (size < 6)
-         {
-            /* Deflate will potentially go into an infinite loop on a SYNC_FLUSH
-             * if this is permitted.
-             */
-            png_warning(png_ptr,
-               "Compression buffer size cannot be reduced below 6");
-
-            return;
-         }
-
-         if (png_ptr->zbuffer_size != size)
-         {
-            png_free_buffer_list(png_ptr, &png_ptr->zbuffer_list);
-            png_ptr->zbuffer_size = (uInt)size;
-         }
-      }
-#  endif
+#  if (defined PNG_SEQUENTIAL_READ_SUPPORTED) || defined PNG_WRITE_SUPPORTED
+      png_ptr->IDAT_size = (png_uint_32)/*SAFE*/size;
+#  endif /* SEQUENTIAL_READ || WRITE */
 }
 
 void PNGAPI
 png_set_invalid(png_const_structrp png_ptr, png_inforp info_ptr, int mask)
 {
    if (png_ptr != NULL && info_ptr != NULL)
-      info_ptr->valid &= ~mask;
+      info_ptr->valid &= PNG_BIC_MASK(mask);
 }
 
 
@@ -1566,7 +1626,7 @@ png_set_user_limits (png_structrp png_ptr, png_uint_32 user_width_max,
 {
    /* Images with dimensions larger than these limits will be
     * rejected by png_set_IHDR().  To accept any PNG datastream
-    * regardless of dimensions, set both limits to 0x7ffffffL.
+    * regardless of dimensions, set both limits to 0x7fffffffL.
     */
    if (png_ptr == NULL)
       return;
@@ -1611,30 +1671,8 @@ png_set_benign_errors(png_structrp png_ptr, int allowed)
          PNG_FLAG_APP_WARNINGS_WARN | PNG_FLAG_APP_ERRORS_WARN;
 
    else
-      png_ptr->flags &= ~(PNG_FLAG_BENIGN_ERRORS_WARN |
+      png_ptr->flags &= PNG_BIC_MASK(PNG_FLAG_BENIGN_ERRORS_WARN |
          PNG_FLAG_APP_WARNINGS_WARN | PNG_FLAG_APP_ERRORS_WARN);
 }
 #endif /* BENIGN_ERRORS */
-
-#ifdef PNG_CHECK_FOR_INVALID_INDEX_SUPPORTED
-   /* Whether to report invalid palette index; added at libng-1.5.10.
-    * It is possible for an indexed (color-type==3) PNG file to contain
-    * pixels with invalid (out-of-range) indexes if the PLTE chunk has
-    * fewer entries than the image's bit-depth would allow. We recover
-    * from this gracefully by filling any incomplete palette with zeros
-    * (opaque black).  By default, when this occurs libpng will issue
-    * a benign error.  This API can be used to override that behavior.
-    */
-void PNGAPI
-png_set_check_for_invalid_index(png_structrp png_ptr, int allowed)
-{
-   png_debug(1, "in png_set_check_for_invalid_index");
-
-   if (allowed > 0)
-      png_ptr->num_palette_max = 0;
-
-   else
-      png_ptr->num_palette_max = -1;
-}
-#endif
 #endif /* READ || WRITE */
